@@ -1,21 +1,38 @@
-# Gunakan image PHP versi 8.2 (sesuaikan jika Anda pakai versi lain)
-FROM php:8.2-cli
+FROM php:8.2-apache
 
-# Install ekstensi yang dibutuhkan (termasuk PostgreSQL untuk Supabase)
-RUN apt-get update && apt-get install -y libpq-dev unzip git \
-    && docker-php-ext-install pdo pdo_pgsql
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    git \
+    curl \
+    libpng-dev \
+    libonig-dev \
+    libxml2-dev \
+    zip \
+    unzip \
+    libpq-dev
 
-# Install Composer
+# Clear cache
+RUN apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# Install PHP extensions (including pdo_pgsql for Supabase PostgreSQL)
+RUN docker-php-ext-install pdo_pgsql pgsql mbstring exif pcntl bcmath gd
+
+# Get latest Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
-# Pindah ke direktori aplikasi
-WORKDIR /app
+# Set working directory
+WORKDIR /var/www/html
 
-# Salin semua file proyek ke dalam server Docker
-COPY . .
+# Copy existing application directory contents
+COPY . /var/www/html
 
-# Install dependensi Laravel
-RUN composer install --optimize-autoloader --no-dev
+# Copy Apache configuration
+COPY docker/apache.conf /etc/apache2/sites-available/000-default.conf
 
-# Jalankan server Laravel menggunakan port dari Render
-CMD php artisan serve --host=0.0.0.0 --port=$PORT
+# Change ownership of our applications
+RUN chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache
+
+# Enable Apache Rewrite Module
+RUN a2enmod rewrite
+
+EXPOSE 80
